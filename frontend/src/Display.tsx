@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 import { Clock3, Monitor, Ticket, Users } from "lucide-react";
 import "./App.css";
 
-const API = "http://localhost:5000";
+const API = "https://token-queue-system-8nxr.onrender.com";
 
 type QueueToken = {
   id: number;
@@ -152,3 +152,4 @@ export default function Display() {
     </main>
   );
 }
+

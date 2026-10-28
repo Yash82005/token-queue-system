@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import "./App.css";
 
-const API = "http://localhost:5000";
+// const API = "http://localhost:5000";
+const API ="https://token-queue-system-8nxr.onrender.com";
 
 type ServiceType = "Deposits" | "Loans" | "Enquiry";
 
@@ -395,3 +396,4 @@ const estimatedWaitMinutes =
 }
 
 export default App;
+
