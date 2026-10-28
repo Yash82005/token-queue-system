@@ -5,16 +5,31 @@ import { Server } from "socket.io";
 export default function tokenRoutes(io: Server) {
   const router = Router();
 
+
   // Generate a new token
   router.post("/", async (req, res) => {
+    const allowedServices = ["Deposits", "Loans", "Enquiry"];
+    const serviceType = req.body?.service_type;
+
+    if (
+      typeof serviceType !== "string" ||
+      !allowedServices.includes(serviceType)
+    ) {
+      return res.status(400).json({
+        message: "Please select a valid service: Deposits, Loans, or Enquiry",
+      });
+    }
+
     try {
       const result = await pool.query(
-        `INSERT INTO tokens (token_number, status)
+        `INSERT INTO tokens (token_number, status, service_type)
          VALUES (
            'A' || LPAD(nextval('token_number_seq')::text, 3, '0'),
-           'waiting'
+           'waiting',
+           $1
          )
-         RETURNING *`
+         RETURNING *`,
+        [serviceType]
       );
 
       const token = result.rows[0];
@@ -23,16 +38,17 @@ export default function tokenRoutes(io: Server) {
 
       res.status(201).json({
         message: "Token generated successfully",
-        token
+        token,
       });
     } catch (error) {
       console.error("Create token error:", error);
 
       res.status(500).json({
-        message: "Failed to generate token"
+        message: "Failed to generate token",
       });
     }
   });
+
 
   // Get all tokens
   router.get("/", async (req, res) => {
@@ -54,10 +70,21 @@ export default function tokenRoutes(io: Server) {
   // Call the next waiting token
   router.patch("/next", async (req, res) => {
     const counterNumber = Number(req.body.counterNumber);
+    const allowedServices = ["Deposits", "Loans", "Enquiry"];
+    const serviceType = req.body?.service_type;
 
-    if (!Number.isInteger(counterNumber) || counterNumber < 1) {
+    if (!Number.isInteger(counterNumber) || counterNumber < 1 || counterNumber > 3) {
       return res.status(400).json({
-        message: "A valid counter number is required"
+        message: "Counter number must be between 1 and 3",
+      });
+    }
+
+    if (
+      typeof serviceType !== "string" ||
+      !allowedServices.includes(serviceType)
+    ) {
+      return res.status(400).json({
+        message: "Please select a valid service",
       });
     }
 
@@ -85,12 +112,14 @@ export default function tokenRoutes(io: Server) {
 
       // Lock the next waiting token
       const waiting = await client.query(
-        `SELECT id FROM tokens
-         WHERE status = 'waiting'
-         ORDER BY id ASC
-         FOR UPDATE SKIP LOCKED
-         LIMIT 1`
-      );
+       `SELECT id FROM tokens
+       WHERE status = 'waiting'
+       AND service_type = $1
+       ORDER BY id ASC
+       FOR UPDATE SKIP LOCKED
+       LIMIT 1`,
+      [serviceType]
+    );
 
       if (waiting.rows.length === 0) {
         await client.query("ROLLBACK");
@@ -130,6 +159,45 @@ export default function tokenRoutes(io: Server) {
       client.release();
     }
   });
+  
+  // Skip a token currently being served
+  router.patch("/:id/skip", async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ message: "Invalid token ID" });
+    }
+
+    try {
+      const result = await pool.query(
+        `UPDATE tokens
+         SET status = 'skipped'
+         WHERE id = $1
+           AND status = 'serving'
+         RETURNING *`,
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: "Serving token not found",
+        });
+      }
+
+      io.emit("queue-updated");
+
+      res.json({
+        message: "Token skipped successfully",
+        token: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Skip token error:", error);
+      res.status(500).json({
+        message: "Failed to skip token",
+      });
+    }
+  });
+
 
   // Complete a token
   router.patch("/:id/complete", async (req, res) => {

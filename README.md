@@ -1,28 +1,44 @@
-# QueueFlow — Real-Time Token Queue Management System
+# QueueFlow — Token Queue Management System
 
-QueueFlow is a full-stack token queue management application that helps visitors join a queue and allows staff to serve visitors efficiently across multiple counters.
+QueueFlow is a full-stack token queue management system designed to reduce waiting confusion and help service counters manage visitors efficiently.
 
 ## Features
 
-- Generate unique visitor tokens
-- View waiting and currently serving tokens
-- Manage multiple service counters
-- Call the next waiting visitor
-- Complete a visitor's service
-- Update queue information in real time using Socket.IO
-- Store token history in PostgreSQL
-- Separate visitor, staff, and public display interfaces
+- **Visitor token generation:** Visitors select a service and receive a token number.
+- **Service-specific queues:** Supports Deposits, Loans, and Enquiry.
+- **Counter management:** Counter staff can call the next eligible token, complete service, or skip a token.
+- **Live public display:** Queue updates are broadcast using Socket.IO.
+- **Estimated waiting time:** Visitors can view an estimated wait based on recent service durations, with a fallback estimate.
+- **Input validation:** The backend validates requests and returns errors for invalid inputs.
+- **Responsive interface:** Built with React and Tailwind CSS for desktop and mobile layouts.
+- **Concurrent token allocation:** Uses PostgreSQL row locking with `FOR UPDATE SKIP LOCKED` to help prevent two counters from claiming the same waiting token.
+- **Automated tests:** Vitest and Supertest test API responses and invalid-input handling.
 
 ## Tech Stack
 
-**Frontend:** React, TypeScript, Vite, Tailwind CSS  
-**Backend:** Node.js, Express.js, TypeScript, Socket.IO  
+**Frontend:** React, TypeScript, Vite, Tailwind CSS, Socket.IO Client
+
+**Backend:** Node.js, Express, TypeScript, Socket.IO
+
 **Database:** PostgreSQL
+
+**Testing:** Vitest, Supertest
 
 ## Project Structure
 
-- `frontend/` — Visitor dashboard, staff counter dashboard, and public display
-- `backend/` — API routes, queue management logic, and database connection
+```text
+token-queue-system/
+├── backend/
+│   ├── src/
+│   ├── tests/
+│   ├── .env.example
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   └── package.json
+├── .gitignore
+└── README.md
+```
 
 ## Prerequisites
 
@@ -30,7 +46,7 @@ QueueFlow is a full-stack token queue management application that helps visitors
 - PostgreSQL
 - Git
 
-## Setup
+## Local Setup
 
 ### 1. Clone the repository
 
@@ -39,6 +55,8 @@ git clone YOUR_GITHUB_REPOSITORY_URL
 cd token-queue-system
 ```
 
+Replace `YOUR_GITHUB_REPOSITORY_URL` with your public GitHub repository URL.
+
 ### 2. Configure the backend
 
 ```bash
@@ -46,7 +64,9 @@ cd backend
 npm install
 ```
 
-Configure your PostgreSQL connection using the environment variable names defined in the backend configuration. Create the required database and tables using your database schema.
+Copy `.env.example` to `.env` and update the database connection string with your local PostgreSQL credentials.
+
+Create the `token_queue_db` database in PostgreSQL and ensure the required tables, sequence, and constraints are configured. Follow the database schema included in this repository.
 
 ### 3. Start the backend
 
@@ -54,9 +74,11 @@ Configure your PostgreSQL connection using the environment variable names define
 npm run dev
 ```
 
-### 4. Configure and start the frontend
+The backend normally runs at `http://localhost:5000`.
 
-Open another terminal:
+### 4. Start the frontend
+
+Open a second terminal:
 
 ```bash
 cd frontend
@@ -64,30 +86,51 @@ npm install
 npm run dev
 ```
 
+Open the local URL printed by Vite, normally `http://localhost:5173`.
+
 ## Application Pages
 
-- Visitor dashboard: `http://localhost:5173/`
-- Staff counter dashboard: `http://localhost:5173/counter`
-- Public display: `http://localhost:5173/display`
-
-The backend runs on `http://localhost:5000` by default.
-
-## API Endpoints
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/api/tokens` | Generate a visitor token |
-| GET | `/api/tokens` | Retrieve all tokens |
-| PATCH | `/api/tokens/next` | Call the next waiting token |
-| PATCH | `/api/tokens/:id/complete` | Complete a serving token |
+- **Visitor:** `/`
+- **Counter:** `/counter`
+- **Public display:** `/display`
 
 ## Testing
 
-The application has been manually tested for token generation, calling tokens at counters, completing service, and displaying the updated queue.
+From the backend directory:
 
-## Future Improvements
+```bash
+npm test
+npm run build
+```
 
-- Automated backend and frontend tests
-- Authentication and role-based staff access
-- Queue analytics and average waiting-time estimates
-- Production deployment and monitoring
+From the frontend directory:
+
+```bash
+npm run build
+```
+
+The current automated test suite contains six tests covering the API status endpoint and invalid-input validation.
+
+## Design Decisions
+
+- PostgreSQL stores queue records and service statuses.
+- Database row locking with `SKIP LOCKED` helps avoid duplicate token allocation when multiple counters request the next token concurrently.
+- Socket.IO broadcasts queue changes so connected displays can update without manual refresh.
+- Service-specific filtering prevents counters from calling tokens from the wrong service queue.
+- The estimated waiting time uses available completed-service durations and a fallback value when there is insufficient history.
+
+## Limitations and Future Improvements
+
+- Improve waiting-time predictions to account for multiple counters serving a queue in parallel.
+- Add authentication and role-based authorization for counter staff.
+- Add daily reports and analytics.
+- Add deployment-specific environment configuration and verify the live application.
+- Expand automated tests to cover successful database operations and concurrent requests.
+
+## AI Tools Used
+
+AI assistance was used during development for coding guidance, debugging, and documentation. All project code and functionality should be reviewed and tested before submission.
+
+## Demo
+
+

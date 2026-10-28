@@ -17,17 +17,22 @@ import "./App.css";
 
 const API = "http://localhost:5000";
 
+type ServiceType = "Deposits" | "Loans" | "Enquiry";
+
 type QueueToken = {
   id: number;
   token_number: string;
-  status: "waiting" | "serving" | "completed";
+  status: "waiting" | "serving" | "completed" | "Skipped";
   counter_number: number | null;
   created_at: string;
+  service_type: ServiceType;
 };
 
 export default function Counter() {
   const [tokens, setTokens] = useState<QueueToken[]>([]);
   const [counter, setCounter] = useState(1);
+  const [selectedService, setSelectedService] = 
+  useState<ServiceType>("Enquiry");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -58,16 +63,20 @@ export default function Counter() {
     };
   }, [refreshQueue]);
 
-  const waitingTokens = tokens.filter(
-    (token) => token.status === "waiting"
-  );
+const serviceTokens = tokens.filter(
+  (token) => token.service_type === selectedService
+);
+
+const waitingTokens = serviceTokens.filter(
+  (token) => token.status === "waiting"
+);
 
   const activeToken =
-    tokens.find(
-      (token) =>
-        token.status === "serving" &&
-        token.counter_number === counter
-    ) ?? null;
+  serviceTokens.find(
+    (token) =>
+      token.status === "serving" &&
+      token.counter_number === counter
+  ) ?? null;
 
   async function callNextToken() {
     setLoading(true);
@@ -78,7 +87,7 @@ export default function Counter() {
       const response = await fetch(`${API}/api/tokens/next`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ counterNumber: counter }),
+        body: JSON.stringify({ counterNumber: counter, service_type: selectedService,}),
       });
 
       const data = await response.json();
@@ -127,6 +136,37 @@ export default function Counter() {
       setLoading(false);
     }
   }
+  
+  async function skipToken() {
+    if (!activeToken) return;
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API}/api/tokens/${activeToken.id}/skip`,
+        { method: "PATCH" }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Could not skip token");
+      }
+
+      setMessage(`${activeToken.token_number} skipped successfully`);
+      await refreshQueue();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
 
   return (
     <div className="app-shell">
@@ -185,6 +225,24 @@ export default function Counter() {
               <div>
                 <span className="section-label">WORKSTATION</span>
                 <h2>Select your counter</h2>
+                <label className="field-label" htmlFor="service-select">              
+                Service
+                </label>
+
+              <select
+               id="service-select"
+               className="counter-select"
+               value={selectedService}
+               onChange={(event) => {
+                 setSelectedService(event.target.value as ServiceType);
+                 setMessage("");
+                 setError("");
+               }}
+              >
+                <option value="Deposits">Deposits</option>
+                <option value="Loans">Loans</option>
+                <option value="Enquiry">Enquiry</option>
+              </select>
               </div>
               <span className="heading-icon">
                 <Monitor size={22} />
@@ -237,7 +295,14 @@ export default function Counter() {
                       <CheckCircle2 size={19} />
                     )}
                     Complete service
-                  </button>
+                  </button>  
+                 <button
+                className="secondary-button"
+                onClick={() => void skipToken()}
+                disabled={loading}
+                >
+              Skip token
+              </button>
                 </>
               ) : (
                 <>

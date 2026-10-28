@@ -16,12 +16,17 @@ import "./App.css";
 
 const API = "http://localhost:5000";
 
+type ServiceType = "Deposits" | "Loans" | "Enquiry";
+
 type QueueToken = {
   id: number;
   token_number: string;
-  status: "waiting" | "serving" | "completed";
+  status: "waiting" | "serving" | "completed" | "skipped";
   counter_number: number | null;
   created_at: string;
+  called_at?: string | null;
+  completed_at?: string | null;
+  service_type: ServiceType;
 };
 
 function App() {
@@ -29,6 +34,8 @@ function App() {
   const [myToken, setMyToken] = useState<QueueToken | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedService, setSelectedService] =
+  useState<ServiceType>("Enquiry");
 
   const refreshQueue = useCallback(async () => {
     try {
@@ -70,8 +77,14 @@ function App() {
 
     try {
       const response = await fetch(`${API}/api/tokens`, {
-        method: "POST",
-      });
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+    service_type: selectedService,
+      }),
+    });
 
       const data = await response.json();
 
@@ -98,10 +111,45 @@ function App() {
     (token) => token.status === "serving"
   );
 
-  const myPosition =
-    myToken?.status === "waiting"
-      ? waitingTokens.findIndex((token) => token.id === myToken.id) + 1
-      : 0;
+  const myServiceWaitingTokens = tokens.filter(
+  (token) =>
+    token.status === "waiting" &&
+    token.service_type === myToken?.service_type
+);
+
+const myPosition =
+  myToken?.status === "waiting"
+    ? myServiceWaitingTokens.findIndex(
+        (token) => token.id === myToken.id
+      ) + 1
+    : 0;
+
+const completedDurations = tokens
+  .filter(
+    (token) =>
+      token.status === "completed" &&
+      token.service_type === myToken?.service_type &&
+      token.called_at &&
+      token.completed_at
+  )
+  .map(
+    (token) =>
+      (new Date(token.completed_at!).getTime() -
+        new Date(token.called_at!).getTime()) /
+      60000
+  )
+  .filter((duration) => duration > 0);
+
+const averageServiceMinutes =
+  completedDurations.length > 0
+    ? completedDurations.reduce((total, duration) => total + duration, 0) /
+      completedDurations.length
+    : 5;
+
+const estimatedWaitMinutes =
+  myToken?.status === "waiting"
+    ? Math.max(0, myPosition - 1) * averageServiceMinutes
+    : 0;
 
   const statusLabel = (status: QueueToken["status"]) => {
     if (status === "serving") return "Now serving";
@@ -166,6 +214,33 @@ function App() {
                 </div>
                 <h3>Ready when you are</h3>
                 <p>Generate your token and join the queue.</p>
+                <label htmlFor="service-type" className="section-label">
+  
+                SELECT YOUR SERVICE
+                </label>
+
+                <select
+                  id="service-type"
+                  value={selectedService}
+                  onChange={(event) =>
+                    setSelectedService(event.target.value as ServiceType)
+                  }
+                  disabled={loading}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    padding: "12px",
+                    margin: "12px 0 20px",
+                    borderRadius: "10px",
+                    border: "1px solid #d1d5db",
+                    background: "white",
+                    color: "#111827",
+                  }}
+                >
+                  <option value="Deposits">Deposits</option>
+                  <option value="Loans">Loans</option>
+                  <option value="Enquiry">Enquiry</option>
+               </select>
 
                 <button
                   className="primary-button"
@@ -202,6 +277,12 @@ function App() {
                             : `${myPosition} in line`}
                         </strong>
                         <p>People ahead of you: {Math.max(0, myPosition - 1)}</p>
+                        <p>
+                          Estimated wait:{" "}
+                          {estimatedWaitMinutes < 1
+                            ? "Less than 1 minute"
+                            : `About ${Math.ceil(estimatedWaitMinutes)} minutes`}
+                        </p> 
                       </div>
                     </>
                   ) : myToken.status === "serving" ? (
